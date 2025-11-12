@@ -1,7 +1,7 @@
 // lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:fintrack/screens/wallet_screen.dart';
-import 'package:fintrack/services/real_api_service.dart'; // ← импорт
+import 'package:fintrack/services/real_api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,7 +11,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _usernameController = TextEditingController(text: 'vlad_kartunov');
+  final TextEditingController _usernameController = TextEditingController(text: 'vlad');
   final TextEditingController _passwordController = TextEditingController(text: '123');
 
   void _login() {
@@ -23,9 +23,9 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // ✅ Создаём сервис и инициализируем
+    // ✅ Создаём RealApiService один раз — с любым userId
     final api = RealApiService(userId: username);
-    api.initializeWithMocksIfEmpty(); // ← если нет данных — моки, иначе — localStorage
+    api.initializeWithMocksIfEmpty(); // если нет localStorage — инициализируем моками
 
     Navigator.pushReplacement(
       context,
@@ -59,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _usernameController,
                 decoration: InputDecoration(
-                  labelText: 'Имя пользователя',
+                  labelText: 'Логин',
                   labelStyle: const TextStyle(color: Colors.black),
                   border: OutlineInputBorder(),
                 ),

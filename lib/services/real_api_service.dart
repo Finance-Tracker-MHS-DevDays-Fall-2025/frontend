@@ -6,7 +6,7 @@ import 'package:fintrack/models/balance.dart';
 import 'package:fintrack/models/dividend.dart';
 import 'package:fintrack/models/forecast.dart';
 
-// Для web: сохранение в localStorage
+// Только для web
 import 'dart:html' as html;
 
 enum TransactionType {
@@ -58,11 +58,11 @@ class RealApiService {
             'Accept': 'application/json',
           },
         )) {
-    // При создании — сразу загружаем из localStorage
+    // Загружаем из localStorage при старте
     _localTransactions.addAll(_loadFromStorage());
   }
 
-  // =============== ЛОКАЛЬНОЕ ХРАНИЛИЩЕ ===============
+  // =============== localStorage ===============
   void _saveToStorage() {
     try {
       final json = jsonEncode(_localTransactions.map((t) => t.toJson()).toList());
@@ -86,29 +86,7 @@ class RealApiService {
     }
   }
 
-  // =============== Вспомогательные ===============
-  double _parseMoney(Map<String, dynamic>? money) {
-    if (money == null) return 0.0;
-    final amountStr = money['amount'] as String?;
-    if (amountStr == null || amountStr.isEmpty) return 0.0;
-    try {
-      return int.parse(amountStr) / 100.0;
-    } catch (e) {
-      print('⚠️ Failed to parse money: $money → $e');
-      return 0.0;
-    }
-  }
-
-  DateTime _parseDate(String? iso) {
-    if (iso == null) return DateTime.now();
-    try {
-      return DateTime.tryParse(iso) ?? DateTime.now();
-    } catch (e) {
-      print('⚠️ Failed to parse date: $iso → $e');
-      return DateTime.now();
-    }
-  }
-
+  // =============== Вспомогательное ===============
   String _getCategoryName(String id) {
     final map = {
       'cat_salary': 'Зарплата',
@@ -135,7 +113,7 @@ class RealApiService {
     return map[id] ?? 'Счёт $id';
   }
 
-  // =============== Создание транзакции + локальное сохранение ===============
+  // =============== ОСНОВНОЙ МЕТОД: добавление + локальное сохранение ===============
   Future<void> createTransaction({
     required double amount,
     required String categoryId,
@@ -150,8 +128,9 @@ class RealApiService {
             ? TransactionType.income
             : TransactionType.expense;
 
-    // 🔥 Optimistic: сразу добавляем локально
+    // 🔥 Optimistic: сразу добавляем локально — UI обновится мгновенно
     final tx = Transaction(
+      id: '', // пока не нужен
       date: date,
       amount: amount,
       type: type.toModelType(),
@@ -164,7 +143,7 @@ class RealApiService {
     );
 
     _localTransactions.add(tx);
-    _saveToStorage(); // сохраняем немедленно
+    _saveToStorage(); // 👈 сохраняем в localStorage
     print('✅ Added locally: $tx');
 
     // Отправляем в бэк
@@ -186,8 +165,8 @@ class RealApiService {
       await _dio.post('/v1/transactions', data: payload);
       print('✅ Sent to backend');
     } on DioException catch (e) {
-      print('⚠️ Backend failed, but UI is updated: ${e.message}');
-      // Не удаляем — пусть остаётся (можно добавить retry позже)
+      print('⚠️ Backend failed, but UI updated: ${e.message}');
+      // Не удаляем — пусть остаётся
     }
   }
 
@@ -204,11 +183,22 @@ class RealApiService {
     }
   }
 
+  double _parseMoney(Map<String, dynamic>? money) {
+    if (money == null) return 0.0;
+    final amountStr = money['amount'] as String?;
+    if (amountStr == null) return 0.0;
+    try {
+      return int.parse(amountStr) / 100.0;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
+  // 🔥 ВСЕГДА возвращаем локальные транзакции — с фильтрацией
   Future<List<Transaction>> getTransactions({
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    // 🔥 Всегда возвращаем локальные — фильтруем по дате
     return _localTransactions.where((t) {
       final d = t.date;
       return (startDate == null || !d.isBefore(startDate)) &&
@@ -229,7 +219,7 @@ class RealApiService {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
         '/v1/forecast',
-        data: {
+         {
           'userId': userId,
           'period': period,
           'periodsAhead': periodsAhead,
@@ -238,7 +228,7 @@ class RealApiService {
       final forecasts = List<Map<String, dynamic>>.from(res.data?['forecasts'] ?? []);
       return forecasts.map((f) => ForecastPeriod.fromJson(f)).toList();
     } catch (e) {
-      print('⚠️ getForecast failed → fallback to mock');
+      print('⚠️ getForecast failed → mock');
       return _mockForecasts();
     }
   }
@@ -246,7 +236,7 @@ class RealApiService {
   // =============== Моки (только для прогноза и инициализации) ===============
   void initializeWithMocksIfEmpty() {
     if (_localTransactions.isEmpty) {
-      print('ℹ️ No local transactions — initializing with mocks');
+      print('ℹ️ Initializing with mocks');
       _localTransactions.addAll(_mockTransactions());
       _saveToStorage();
     }
@@ -254,6 +244,7 @@ class RealApiService {
 
   List<Transaction> _mockTransactions() => [
         Transaction(
+          id: '',
           date: DateTime.now(),
           amount: 5000,
           type: 'income',
@@ -265,6 +256,7 @@ class RealApiService {
           description: 'Аванс',
         ),
         Transaction(
+          id: '',
           date: DateTime.now().subtract(const Duration(days: 1)),
           amount: -2000,
           type: 'expense',
@@ -272,9 +264,11 @@ class RealApiService {
           categoryId: 'cat_food',
           source: 'Сбербанк',
           fromAccountId: 'acc_sber',
+          toAccountId: '',
           description: 'Продукты',
         ),
         Transaction(
+          id: '',
           date: DateTime.now().subtract(const Duration(days: 3)),
           amount: -800,
           type: 'expense',
@@ -282,9 +276,11 @@ class RealApiService {
           categoryId: 'cat_transport',
           source: 'ВТБ',
           fromAccountId: 'acc_vtb',
+          toAccountId: '',
           description: 'Метро',
         ),
         Transaction(
+          id: '',
           date: DateTime.now().subtract(const Duration(days: 5)),
           amount: 1000,
           type: 'income',
@@ -292,9 +288,11 @@ class RealApiService {
           categoryId: 'cat_freelance',
           source: 'Наличные',
           fromAccountId: 'acc_cash',
+          toAccountId: '',
           description: 'Fiverr',
         ),
         Transaction(
+          id: '',
           date: DateTime.now().subtract(const Duration(days: 7)),
           amount: -3500,
           type: 'expense',
@@ -302,6 +300,7 @@ class RealApiService {
           categoryId: 'cat_rent',
           source: 'T-банк',
           fromAccountId: 'acc_tbank',
+          toAccountId: '',
           description: 'Квартира',
         ),
       ];

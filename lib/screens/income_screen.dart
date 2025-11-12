@@ -5,11 +5,13 @@ import 'package:fintrack/screens/settings_screen.dart';
 import 'package:fintrack/screens/investments_screen.dart';
 import 'package:fintrack/services/real_api_service.dart';
 import 'package:fintrack/models/transaction.dart';
-import 'package:fintrack/models/forecast.dart'; // ← ДОБАВЛЕНО
+import 'package:fintrack/models/forecast.dart';
 
 class IncomeScreen extends StatefulWidget {
+  final RealApiService api; // ← принимаем извне
   final String? title;
-  const IncomeScreen({super.key, this.title = 'Доходы'});
+  const IncomeScreen({super.key, required this.api, this.title = 'Доходы'});
+
   @override
   State<IncomeScreen> createState() => _IncomeScreenState();
 }
@@ -17,13 +19,14 @@ class IncomeScreen extends StatefulWidget {
 class _IncomeScreenState extends State<IncomeScreen> {
   late final RealApiService api;
   List<Transaction> incomes = [];
-  List<ForecastPeriod> forecastPeriods = []; // ← ДОБАВЛЕНО
+  List<ForecastPeriod> forecastPeriods = [];
+
   int _tabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    api = RealApiService(userId: 'vlad_kartunov');
+    api = widget.api; // ← используем переданный
     _loadData();
   }
 
@@ -183,7 +186,10 @@ class _IncomeScreenState extends State<IncomeScreen> {
           IconButton(
             icon: const Icon(Icons.trending_up_outlined, size: 24, color: Colors.white),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const InvestmentsScreen()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => InvestmentsScreen(api: api)),
+              );
             },
           ),
           const SizedBox(width: 8),
@@ -271,7 +277,6 @@ class _IncomeScreenState extends State<IncomeScreen> {
         showTitle: false,
       );
     }).toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

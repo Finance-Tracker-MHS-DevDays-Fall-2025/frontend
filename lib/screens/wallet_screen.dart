@@ -7,18 +7,18 @@ import 'package:fintrack/screens/settings_screen.dart';
 import 'package:fintrack/screens/history_screen.dart';
 import 'package:fintrack/screens/income_screen.dart';
 import 'package:fintrack/screens/expense_screen.dart';
-import 'package:fintrack/services/real_api_service.dart'; // ← заменено
+import 'package:fintrack/services/real_api_service.dart';
 import 'package:fintrack/models/transaction.dart';
 
 class WalletScreen extends StatefulWidget {
-  const WalletScreen({super.key});
+  final RealApiService api;
+  const WalletScreen({super.key, required this.api});
 
   @override
   State<WalletScreen> createState() => _WalletScreenState();
 }
 
 class _WalletScreenState extends State<WalletScreen> {
-  // ← ЗАМЕНА ApiService → RealApiService
   late final RealApiService api;
   double wallet = 0;
   double investments = 0;
@@ -27,8 +27,7 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   void initState() {
     super.initState();
-    // Используем фиксированный userId пока нет авторизации
-    api = RealApiService(userId: 'vlad_kartunov');
+    api = widget.api;
     _loadData();
   }
 
@@ -181,7 +180,6 @@ class _WalletScreenState extends State<WalletScreen> {
                           );
                           return;
                         }
-
                         final amount = double.tryParse(amountStr) ?? 0.0;
                         if (amount == 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -189,11 +187,8 @@ class _WalletScreenState extends State<WalletScreen> {
                           );
                           return;
                         }
-
                         final date = DateTime.tryParse('${dateController.text}T12:00:00') ??
                             DateTime.now();
-
-                        // 🚀 Отправляем в API
                         api.createTransaction(
                           amount: amount,
                           categoryId: categoryId,
@@ -246,7 +241,10 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               ),
               GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InvestmentsScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => InvestmentsScreen(api: api)),
+                ),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
@@ -259,7 +257,10 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               ),
               GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
@@ -275,7 +276,11 @@ class _WalletScreenState extends State<WalletScreen> {
                 icon: const Icon(Icons.notifications_outlined, size: 24, color: Colors.white),
                 onPressed: _showNotifications,
               ),
-              const CircleAvatar(radius: 14, backgroundColor: Color(0xFF3C4759), child: Icon(Icons.person, size: 16, color: Colors.white)),
+              const CircleAvatar(
+                radius: 14,
+                backgroundColor: Color(0xFF3C4759),
+                child: Icon(Icons.person, size: 16, color: Colors.white),
+              ),
               const SizedBox(width: 16),
             ],
           ),
@@ -294,7 +299,10 @@ class _WalletScreenState extends State<WalletScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     ElevatedButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => HistoryScreen(api: api)),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF16213E),
                         foregroundColor: Colors.white,
@@ -305,7 +313,10 @@ class _WalletScreenState extends State<WalletScreen> {
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpenseScreen())),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => ExpenseScreen(api: api)),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF16213E),
                         foregroundColor: Colors.white,
@@ -316,7 +327,10 @@ class _WalletScreenState extends State<WalletScreen> {
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IncomeScreen())),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => IncomeScreen(api: api)),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF16213E),
                         foregroundColor: Colors.white,
@@ -404,7 +418,7 @@ class _WalletScreenState extends State<WalletScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ElevatedButton(
-                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IncomeScreen())),
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => IncomeScreen(api: api))),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green.withOpacity(0.2),
                             foregroundColor: Colors.green,
@@ -415,7 +429,7 @@ class _WalletScreenState extends State<WalletScreen> {
                         ),
                         const SizedBox(width: 16),
                         ElevatedButton(
-                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpenseScreen())),
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ExpenseScreen(api: api))),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red.withOpacity(0.2),
                             foregroundColor: Colors.red,
@@ -504,7 +518,6 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   int _selectedPeriod = 0;
-
   Widget _buildPeriodButton(String label, int index) => ElevatedButton(
         onPressed: () => setState(() => _selectedPeriod = index),
         style: ElevatedButton.styleFrom(
@@ -578,7 +591,6 @@ class _WalletScreenState extends State<WalletScreen> {
     final now = DateTime.now();
     final startDay = DateTime(now.year, now.month, now.day - 30);
     points.add(FlSpot(0, balance));
-
     for (int i = 1; i <= 30; i++) {
       final day = startDay.add(Duration(days: i));
       for (var t in sorted) {
@@ -588,7 +600,6 @@ class _WalletScreenState extends State<WalletScreen> {
       }
       points.add(FlSpot(i.toDouble(), balance));
     }
-
     return LineChart(
       LineChartData(
         gridData: FlGridData(

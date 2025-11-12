@@ -1,23 +1,24 @@
 // lib/screens/history_screen.dart
 import 'package:flutter/material.dart';
-import 'package:fintrack/services/real_api_service.dart'; // ← заменено
+import 'package:fintrack/services/real_api_service.dart';
 import 'package:fintrack/models/transaction.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  final RealApiService api;
+  const HistoryScreen({super.key, required this.api});
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  late final RealApiService api; // ← RealApiService
+  late final RealApiService api;
   List<Transaction> transactions = [];
 
   @override
   void initState() {
     super.initState();
-    api = RealApiService(userId: 'vlad_kartunov');
+    api = widget.api;
     _loadData();
   }
 
@@ -122,7 +123,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         final amount = double.tryParse(amountStr) ?? 0.0;
                         if (amount == 0) return;
                         final date = DateTime.tryParse('${dateController.text}T12:00:00') ?? DateTime.now();
-
                         api.createTransaction(
                           amount: amount,
                           categoryId: cat,

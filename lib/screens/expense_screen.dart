@@ -5,11 +5,13 @@ import 'package:fintrack/screens/settings_screen.dart';
 import 'package:fintrack/screens/investments_screen.dart';
 import 'package:fintrack/services/real_api_service.dart';
 import 'package:fintrack/models/transaction.dart';
-import 'package:fintrack/models/forecast.dart'; // ← ДОБАВЛЕНО
+import 'package:fintrack/models/forecast.dart';
 
 class ExpenseScreen extends StatefulWidget {
+  final RealApiService api;
   final String? title;
-  const ExpenseScreen({super.key, this.title = 'Расходы'});
+  const ExpenseScreen({super.key, required this.api, this.title = 'Расходы'});
+
   @override
   State<ExpenseScreen> createState() => _ExpenseScreenState();
 }
@@ -17,13 +19,13 @@ class ExpenseScreen extends StatefulWidget {
 class _ExpenseScreenState extends State<ExpenseScreen> {
   late final RealApiService api;
   List<Transaction> expenses = [];
-  List<ForecastPeriod> forecastPeriods = []; // ← ДОБАВЛЕНО
+  List<ForecastPeriod> forecastPeriods = [];
   int _tabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    api = RealApiService(userId: 'vlad_kartunov');
+    api = widget.api;
     _loadData();
   }
 
@@ -183,14 +185,20 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           IconButton(
             icon: const Icon(Icons.trending_up_outlined, size: 24, color: Colors.white),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const InvestmentsScreen()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => InvestmentsScreen(api: api)),
+              );
             },
           ),
           const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 24, color: Colors.white),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => SettingsScreen(api: api)),
+              );
             },
           ),
           const SizedBox(width: 8),
@@ -271,7 +279,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         showTitle: false,
       );
     }).toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
