@@ -1,9 +1,10 @@
-// lib/screens/investments_screen.dart
+// ✅ Импорты
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:fintrack/services/real_api_service.dart';
 import 'package:fintrack/models/dividend.dart';
 import 'package:fintrack/widgets/top_app_bar.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class Asset {
   final String id;
@@ -11,6 +12,7 @@ class Asset {
   final double value;
   final double invested;
   final List<String> tags;
+
   Asset({
     required this.id,
     required this.name,
@@ -18,16 +20,126 @@ class Asset {
     required this.invested,
     this.tags = const [],
   });
+
   double get profit => value - invested;
+
   factory Asset.fromJson(Map<String, dynamic> json) {
     return Asset(
-      id: json['id'] as String? ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? 'Без названия',
       value: (json['value'] as num?)?.toDouble() ?? 0.0,
       invested: (json['invested'] as num?)?.toDouble() ?? 0.0,
       tags: List<String>.from(json['tags'] ?? []),
     );
   }
+}
+
+class _InteractivePieChart extends StatefulWidget {
+  final List<Asset> assets;
+  final double totalValue;
+  final ValueChanged<int?> onHover;
+  final Color Function(int) getColorForIndex;
+
+  const _InteractivePieChart({
+    super.key,
+    required this.assets,
+    required this.totalValue,
+    required this.onHover,
+    required this.getColorForIndex,
+  });
+
+  @override
+  State<_InteractivePieChart> createState() => _InteractivePieChartState();
+}
+
+class _InteractivePieChartState extends State<_InteractivePieChart> {
+  int? _hoveredIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onHover: (_) => widget.onHover(null),
+      child: GestureDetector(
+        onPanUpdate: (_) => widget.onHover(null),
+        child: CustomPaint(
+          size: const Size.square(300),
+          painter: _PieChartPainter(
+            assets: widget.assets,
+            totalValue: widget.totalValue,
+            hoveredIndex: _hoveredIndex,
+            getColorForIndex: widget.getColorForIndex,
+          ),
+          child: SizedBox.expand(
+            child: Stack(
+              children: [
+                for (int i = 0; i < widget.assets.length; i++)
+                  Positioned.fill(
+                    child: MouseRegion(
+                      onEnter: (_) => setState(() => _hoveredIndex = i),
+                      onExit: (_) => setState(() => _hoveredIndex = null),
+                      cursor: SystemMouseCursors.click,
+                      child: Container(),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PieChartPainter extends CustomPainter {
+  final List<Asset> assets;
+  final double totalValue;
+  final int? hoveredIndex;
+  final Color Function(int) getColorForIndex;
+
+  _PieChartPainter({
+    required this.assets,
+    required this.totalValue,
+    required this.hoveredIndex,
+    required this.getColorForIndex,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide / 2 - 20;
+    double startAngle = -math.pi / 2;
+
+    for (int i = 0; i < assets.length; i++) {
+      final asset = assets[i];
+      final sweepAngle = totalValue > 0
+          ? 2 * math.pi * (asset.value / totalValue)
+          : 0.0;
+      final isHovered = i == hoveredIndex;
+      final color = getColorForIndex(i);
+
+      final paint = Paint()
+        ..color = color.withOpacity(isHovered ? 1.0 : 0.7)
+        ..style = PaintingStyle.fill;
+
+      final drawRadius = isHovered ? radius * 1.08 : radius;
+
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: drawRadius),
+        startAngle,
+        sweepAngle,
+        true,
+        paint,
+      );
+
+      startAngle += sweepAngle;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PieChartPainter oldDelegate) =>
+      assets != oldDelegate.assets ||
+      totalValue != oldDelegate.totalValue ||
+      hoveredIndex != oldDelegate.hoveredIndex;
 }
 
 class InvestmentsScreen extends StatefulWidget {
@@ -67,6 +179,12 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
     super.dispose();
   }
 
+  String _generateNextId() {
+    if (_assets.isEmpty) return '1';
+    final lastId = int.tryParse(_assets.last.id) ?? 0;
+    return (lastId + 1).toString();
+  }
+
   Future<void> _loadDividends() async {
     setState(() => _isLoading = true);
     try {
@@ -77,7 +195,7 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⚠️ Не удалось загрузить дивиденды')),
+          const SnackBar(content: Text('Не удалось загрузить дивиденды')),
         );
       }
     } finally {
@@ -87,20 +205,20 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
 
   void _showNotifications() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('🔔 Уведомления — Coming Soon')),
+      const SnackBar(content: Text('Уведомления — Coming Soon')),
     );
   }
 
   void _showAddAssetDialog() {
     final nameCtrl = TextEditingController();
-    final valueCtrl = TextEditingController(text: '0');
-    final investedCtrl = TextEditingController(text: '0');
+    final priceCtrl = TextEditingController(text: '0');
+    final quantityCtrl = TextEditingController(text: '1');
     String selectedType = 'stocks_ru';
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('➕ Добавить актив'),
+        title: const Text('Добавить актив'),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
@@ -112,15 +230,15 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
               ),
               const SizedBox(height: 8),
               TextField(
-                controller: valueCtrl,
+                controller: priceCtrl,
                 keyboardType: TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Стоимость (₽)'),
+                decoration: const InputDecoration(labelText: 'Цена за единицу (₽)'),
               ),
               const SizedBox(height: 8),
               TextField(
-                controller: investedCtrl,
+                controller: quantityCtrl,
                 keyboardType: TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Вложено (₽)'),
+                decoration: const InputDecoration(labelText: 'Количество'),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
@@ -139,23 +257,41 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
           ),
         ),
         actions: [
-          TextButton(onPressed: Navigator.of(ctx).pop, child: const Text('Отмена')),
+          TextButton(
+            onPressed: Navigator.of(ctx).pop,
+            child: const Text('Отмена'),
+          ),
           ElevatedButton(
             onPressed: () {
               final name = nameCtrl.text.trim();
               if (name.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Укажите название')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Укажите название')),
+                );
                 return;
               }
-              final value = double.tryParse(valueCtrl.text) ?? 0.0;
-              final invested = double.tryParse(investedCtrl.text) ?? 0.0;
-              if (value < 0 || invested < 0) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚠️ Суммы не могут быть отрицательными')));
+              final price = double.tryParse(priceCtrl.text) ?? 0.0;
+              final quantity = double.tryParse(quantityCtrl.text) ?? 1.0;
+
+              if (price < 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Цена не может быть отрицательной')),
+                );
                 return;
               }
+              if (quantity <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Количество должно быть > 0')),
+                );
+                return;
+              }
+
+              final value = price * quantity;
+              final invested = value;
+
               setState(() {
                 _assets.add(Asset(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  id: _generateNextId(),
                   name: name,
                   value: value,
                   invested: invested,
@@ -205,6 +341,7 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
     return colors[index % colors.length];
   }
 
+  // 🔹 Вычисляемые свойства
   double get _portfolioValue => _assets.fold(0.0, (sum, a) => sum + a.value);
   double get _totalInvested => _assets.fold(0.0, (sum, a) => sum + a.invested);
   double get _profit => _portfolioValue - _totalInvested;
@@ -257,105 +394,91 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
   }
 
   Widget _buildPortfolioTab() {
-  return SingleChildScrollView(
-    padding: const EdgeInsets.all(20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-
-        _buildTopStatsCards(),
-        const SizedBox(height: 24),
-
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 1,
-              child: Card(
-                color: Colors.grey[900],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Структура портфеля',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 12),
-                      _buildPieChart(),
-                    ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTopStatsCards(),
+          const SizedBox(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 1,
+                child: Card(
+                  color: Colors.grey[900],
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Структура портфеля',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildPieChart(),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 24),
-            Expanded(
-              flex: 2,
-              child: Card(
-                color: Colors.grey[900],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Активы',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 12),
-                      _buildAssetsList(),
-                    ],
+              const SizedBox(width: 24),
+              Expanded(
+                flex: 2,
+                child: Card(
+                  color: Colors.grey[900],
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Активы',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildAssetsList(),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 24),
-      ],
-    ),
-  );
-}
-
-  Widget _buildPieChart() {
-  if (_assets.isEmpty) {
-    return Center(
-      child: Text('Нет активов', style: TextStyle(color: Colors.grey[500])),
+            ],
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
     );
   }
 
-  final List<PieChartSectionData> sections = _assets.asMap().entries.map((entry) {
-    final int index = entry.key;
-    final Asset asset = entry.value;
+  Widget _buildPieChart() {
+    if (_assets.isEmpty) {
+      return Center(
+        child: Text('Нет активов', style: TextStyle(color: Colors.grey[500])),
+      );
+    }
 
-    final double share = _portfolioValue > 0 ? (asset.value / _portfolioValue * 100) : 0.0;
-    final Color color = _getColorForAssetIndex(index);
-
-    return PieChartSectionData(
-      color: color,
-      value: asset.value,
-      title: '${share.toStringAsFixed(1)}%',
-      radius: 100,
-      titleStyle: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest.shortestSide - 40;
+        return SizedBox(
+          width: size,
+          height: size,
+          child: _InteractivePieChart(
+            assets: _assets,
+            totalValue: _portfolioValue,
+            onHover: (index) => setState(() {}),
+            getColorForIndex: _getColorForAssetIndex,
+          ),
+        );
+      },
     );
-  }).toList();
+  }
 
-  return AspectRatio(
-    aspectRatio: 1.0,
-    child: PieChart(
-      PieChartData(
-        borderData: FlBorderData(show: false),
-        sectionsSpace: 0,
-        centerSpaceRadius: 40,
-        sections: sections,
-      ),
-    ),
-  );
-}
   Widget _buildTopStatsCards() {
     return Row(
       children: [
@@ -379,10 +502,12 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
       final prefix = value < 0 ? '−' : '';
       return '$prefix${abs.toInt()} $unit';
     }
+
     String subtitle() {
       if (unit == '%') return '${_totalInvested.toInt()} ₽ вложено';
       return '${_passiveIncomeYearly.toInt()} ₽/год';
     }
+
     return Card(
       color: Colors.grey[900],
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -420,29 +545,29 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
         headingRowColor: MaterialStateColor.resolveWith((_) => Colors.grey[800]!),
         dataRowColor: MaterialStateColor.resolveWith((_) => Colors.grey[900]!),
         columns: [
-          DataColumn(label: Text('ID', style: const TextStyle(color: Colors.white))), // 👈 Белый цвет
-          DataColumn(label: Text('Актив', style: const TextStyle(color: Colors.white))),
-          DataColumn(label: Text('₽', style: const TextStyle(color: Colors.white)), tooltip: ''),
-          DataColumn(label: Text('Вложено', style: const TextStyle(color: Colors.white)), tooltip: ''),
-          DataColumn(label: Text('Прибыль', style: const TextStyle(color: Colors.white)), tooltip: ''),
-          DataColumn(label: Text('ROI', style: const TextStyle(color: Colors.white)), tooltip: ''),
-          DataColumn(label: Text('Доля', style: const TextStyle(color: Colors.white)), tooltip: ''),
+          DataColumn(label: const Text('ID', style: TextStyle(color: Colors.white))),
+          DataColumn(label: const Text('Актив', style: TextStyle(color: Colors.white))),
+          DataColumn(label: const Text('₽', style: TextStyle(color: Colors.white)), tooltip: ''),
+          DataColumn(label: const Text('Вложено', style: TextStyle(color: Colors.white)), tooltip: ''),
+          DataColumn(label: const Text('Прибыль', style: TextStyle(color: Colors.white)), tooltip: ''),
+          DataColumn(label: const Text('ROI', style: TextStyle(color: Colors.white)), tooltip: ''),
+          DataColumn(label: const Text('Доля', style: TextStyle(color: Colors.white)), tooltip: ''),
         ],
         rows: _assets.map((asset) {
           final profit = asset.profit;
           final roi = asset.invested > 0 ? (profit / asset.invested * 100) : 0.0;
           final share = _portfolioValue > 0 ? (asset.value / _portfolioValue * 100) : 0.0;
-          final color = profit > 0 ? Colors.green : profit < 0 ? Colors.red : Colors.grey[400];
+          final color = profit > 0 ? Colors.green : profit < 0 ? Colors.red : Colors.grey[400]!;
 
           return DataRow(
             cells: [
-              DataCell(Text(asset.id, style: const TextStyle(fontSize: 11, color: Colors.white))), // 👈 Белый цвет
-              DataCell(Text(asset.name, style: const TextStyle(color: Colors.white))), // 👈 Белый цвет
-              DataCell(Text('${asset.value.toInt()}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white))), // 👈 Белый цвет
-              DataCell(Text('${asset.invested.toInt()}', style: const TextStyle(color: Colors.white))), // 👈 Белый цвет
-              DataCell(Text('${profit >= 0 ? '+' : '−'}${profit.abs().toInt()}', style: TextStyle(color: color))), // Цвет зависит от прибыли
-              DataCell(Text('${roi >= 0 ? '+' : '−'}${roi.toStringAsFixed(1)}%', style: TextStyle(color: color))), // Цвет зависит от ROI
-              DataCell(Text('${share.toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white))), // 👈 Белый цвет
+              DataCell(Text(asset.id, style: const TextStyle(fontSize: 11, color: Colors.white))),
+              DataCell(Text(asset.name, style: const TextStyle(color: Colors.white))),
+              DataCell(Text('${asset.value.toInt()}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white))),
+              DataCell(Text('${asset.invested.toInt()}', style: const TextStyle(color: Colors.white))),
+              DataCell(Text('${profit >= 0 ? '+' : '−'}${profit.abs().toInt()}', style: TextStyle(color: color))),
+              DataCell(Text('${roi >= 0 ? '+' : '−'}${roi.toStringAsFixed(1)}%', style: TextStyle(color: color))),
+              DataCell(Text('${share.toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white))),
             ],
           );
         }).toList(),

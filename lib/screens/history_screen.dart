@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:fintrack/services/real_api_service.dart';
 import 'package:fintrack/models/transaction.dart';
+import 'package:fintrack/models/category.dart';
 
 class HistoryScreen extends StatefulWidget {
   final RealApiService api;
@@ -40,10 +41,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void _showAddTransaction() async {
     try {
       final categories = await api.getCategories();
+      final accounts = await api.getAccounts();
+
+      if (accounts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет счетов')));
+        return;
+      }
+
       String selectedCategoryId = categories.isNotEmpty ? categories.first.id : 'cat_other';
-      String selectedType = 'income'; // по умолчанию
+      String selectedAccountId = accounts.first.id;
+      String selectedType = 'income';
+
       final amountController = TextEditingController();
-      final fromAccountController = TextEditingController(text: 'acc_cash');
       final dateController = TextEditingController(
         text: DateTime.now().toLocal().toIso8601String().split('T')[0],
       );
@@ -72,8 +81,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       keyboardType: TextInputType.number,
                     ),
                     const SizedBox(height: 12),
-                    DropdownButton<String>(
+                    DropdownButtonFormField<String>(
                       value: selectedCategoryId,
+                      decoration: InputDecoration(
+                        labelText: 'Категория',
+                        labelStyle: const TextStyle(color: Colors.white),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                       items: categories.map((cat) {
                         return DropdownMenuItem(
                           value: cat.id,
@@ -89,12 +103,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         }
                       },
                       dropdownColor: const Color(0xFF1A1A2E),
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                      underline: Container(),
-                      isExpanded: true,
+                      style: const TextStyle(color: Colors.white),
                     ),
                     const SizedBox(height: 12),
-                    // 🔹 Выбор типа: доход/расход
+                    DropdownButtonFormField<String>(
+                      value: selectedAccountId,
+                      decoration: InputDecoration(
+                        labelText: 'Счёт',
+                        labelStyle: const TextStyle(color: Colors.white),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      items: accounts.map((acc) {
+                        return DropdownMenuItem(
+                          value: acc.id,
+                          child: Text(
+                            acc.name,
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => selectedAccountId = value);
+                        }
+                      },
+                      dropdownColor: const Color(0xFF1A1A2E),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 12),
                     const Text('Тип операции', style: TextStyle(color: Colors.white)),
                     const SizedBox(height: 8),
                     Row(
@@ -123,16 +159,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: fromAccountController,
-                      decoration: InputDecoration(
-                        labelText: 'ID счёта',
-                        labelStyle: const TextStyle(color: Colors.white),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      style: const TextStyle(color: Colors.white),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -165,13 +191,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                             onPressed: () {
                               final amountStr = amountController.text.trim();
-                              final accId = fromAccountController.text.trim();
-                              if (amountStr.isEmpty || accId.isEmpty) {
+                              if (amountStr.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Заполните сумму и счёт')),
+                                  const SnackBar(content: Text('Заполните сумму')),
                                 );
                                 return;
                               }
+
                               final amount = double.tryParse(amountStr);
                               if (amount == null || amount == 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -182,29 +208,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
                               final date = DateTime.tryParse('${dateController.text}T12:00:00') ?? DateTime.now();
 
-                              // ✅ ОПРЕДЕЛЯЕМ ТИП ДЛЯ API
-                              String apiType;
-                              if (selectedType == 'income') {
-                                apiType = 'TRANSACTION_TYPE_INCOME';
-                              } else {
-                                apiType = 'TRANSACTION_TYPE_EXPENSE';
-                              }
+                              String apiType = selectedType == 'income'
+                                  ? 'TRANSACTION_TYPE_INCOME'
+                                  : 'TRANSACTION_TYPE_EXPENSE';
 
-                              // ✅ ПЕРЕДАЁМ ОБЯЗАТЕЛЬНЫЙ ПАРАМЕТР `type`
                               api.createTransaction(
-                                amount: amount.abs(), // серверу — положительное число
-                                categoryId: selectedCategoryId,
-                                fromAccountId: accId,
+                                amount: amount.abs(),
+                                fromAccountId: selectedAccountId,
                                 date: date,
                                 description: descriptionController.text.trim(),
-                                type: apiType, // ← КЛЮЧЕВОЕ — устраняет ошибку
+                                type: apiType,
                               ).then((newTx) {
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(content: Text('✅ Операция добавлена')),
                                   );
                                   Navigator.pop(context);
-                                  _loadData(); // ✅ обновить ВСЮ историю
+                                  _loadData(); // обновляем список
                                 }
                               }).catchError((e) {
                                 if (mounted) {
@@ -377,9 +397,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ],
             ),
           ),
-          // ✅ ЕДИНАЯ ФОРМУЛА ДЛЯ ВСЕХ ЭКРАНОВ
           Text(
-            '${t.amount.sign == 1 ? '+' : '−'}${t.amount.abs().toStringAsFixed(0)} ₽',
+            '${t.amount >= 0 ? '+' : '−'}${t.amount.abs().toStringAsFixed(0)} ₽',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: t.amount >= 0 ? Colors.green : Colors.red,
@@ -407,11 +426,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
     final twoDaysAgo = today.subtract(const Duration(days: 2));
+
     if (date == today) return 'Сегодня';
     if (date == yesterday) return 'Вчера';
     if (date == twoDaysAgo) return 'Позавчера';
-    const months = ['', 'января', 'февраля', 'марта', 'апреля', 'мая',
-      'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+    const months = [
+      '',
+      'января',
+      'февраля',
+      'марта',
+      'апреля',
+      'мая',
+      'июня',
+      'июля',
+      'августа',
+      'сентября',
+      'октября',
+      'ноября',
+      'декабря'
+    ];
     return '${date.day} ${months[date.month]}';
   }
 }

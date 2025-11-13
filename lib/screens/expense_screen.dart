@@ -6,6 +6,7 @@ import 'package:fintrack/screens/investments_screen.dart';
 import 'package:fintrack/services/real_api_service.dart';
 import 'package:fintrack/models/transaction.dart';
 import 'package:fintrack/models/forecast.dart';
+import 'package:fintrack/widgets/top_app_bar.dart'; // ← импортируем TopAppBar
 
 class ExpenseScreen extends StatefulWidget {
   final RealApiService api;
@@ -51,32 +52,13 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF16213E),
-        elevation: 0,
-        title: Text(widget.title ?? 'Расходы', style: const TextStyle(fontSize: 20)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.trending_up_outlined, size: 24, color: Colors.white),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => InvestmentsScreen(api: api)));
-            },
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, size: 24, color: Colors.white),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(api: api)));
-            },
-          ),
-          const SizedBox(width: 8),
-          const CircleAvatar(
-            radius: 14,
-            backgroundColor: Color(0xFF3C4759),
-            child: Icon(Icons.person, size: 16, color: Colors.white),
-          ),
-          const SizedBox(width: 16),
-        ],
+      appBar: TopAppBar(
+        api: widget.api,
+        currentPage: TopPage.wallet,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SafeArea(
         child: Column(

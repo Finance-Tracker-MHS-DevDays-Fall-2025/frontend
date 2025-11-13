@@ -11,7 +11,6 @@ class Account {
   final String type;
   final double balance;
   final String currency;
-
   Account({
     required this.id,
     required this.name,
@@ -47,7 +46,6 @@ class Account {
 class Category {
   final String id;
   final String name;
-
   Category({required this.id, required this.name});
 
   factory Category.fromJson(Map<String, dynamic> json) => Category(
@@ -106,8 +104,8 @@ class RealApiService {
 
       final totalBalanceMap = data['totalBalance'] as Map<String, dynamic>?;
       final total = Account._parseMoney(totalBalanceMap);
-
       double wallet = total, investments = 0.0;
+
       final accounts = data['accounts'];
       if (accounts is List) {
         wallet = 0.0;
@@ -124,7 +122,7 @@ class RealApiService {
 
       return _cachedBalance = BalanceSummary(wallet: wallet, investments: investments);
     } catch (e) {
-      print('🔴 getBalance: $e');
+      print('getBalance: $e');
       rethrow;
     }
   }
@@ -139,7 +137,7 @@ class RealApiService {
           .map(Account.fromJson)
           .toList();
     } catch (e) {
-      print('🔴 getAccounts: $e');
+      print('getAccounts: $e');
       return [];
     }
   }
@@ -147,58 +145,52 @@ class RealApiService {
   Future<List<Category>> getCategories() async => knownCategories;
 
   Future<Transaction> createTransaction({
-    required double amount,
-    required String categoryId,
-    required String fromAccountId,
-    String? toAccountId,
-    required DateTime date,
-    String description = '',
-    required String type, // 'TRANSACTION_TYPE_INCOME' / 'EXPENSE' / 'TRANSFER'
-  }) async {
-    final payload = <String, dynamic>{
-      'userId': userId,
-      'type': type,
-      'amount': {'amount': amount.abs().round().toString(), 'currency': 'RUB'},
-      'categoryId': categoryId,
-      'fromAccountId': fromAccountId,
-      'date': _toProtoTimestamp(date),
-      if (description.isNotEmpty) 'description': description,
-      if (toAccountId != null && toAccountId.isNotEmpty) 'toAccountId': toAccountId,
-    };
+  required double amount,
+  required String fromAccountId,
+  String? toAccountId,
+  required DateTime date,
+  String description = '',
+  required String type,
+}) async {
+  final payload = <String, dynamic>{
+    'userId': userId,
+    'type': type,
+    'amount': {'amount': amount.abs().round().toString(), 'currency': 'RUB'},
+    'fromAccountId': fromAccountId,
+    'date': _toProtoTimestamp(date),
+    if (description.isNotEmpty) 'description': description,
+    if (toAccountId != null && toAccountId.isNotEmpty) 'toAccountId': toAccountId,
+  };
 
-    print('📤 POST /transactions: $payload');
-    try {
-      final res = await _dio.post<Map<String, dynamic>>(
-  '/transactions',
-  data: payload,
-);
-      final newTx = Transaction.fromJson(res.data ?? {});
-      _cachedTransactions.insert(0, newTx);
-      _cachedBalance = null;
-      _cachedAccounts.clear();
-      print('✅ Created: ${newTx.id}');
-      return newTx;
-    } catch (e) {
-      print('🔴 createTransaction: $e');
-      rethrow;
-    }
+  print('POST /transactions: $payload');
+  try {
+    final res = await _dio.post<Map<String, dynamic>>('/transactions', data: payload);
+    final newTx = Transaction.fromJson(res.data ?? {});
+
+    _cachedTransactions.clear();
+    _cachedBalance = null;
+    _cachedAccounts.clear();
+
+    print('Created: ${newTx.id}, category: ${newTx.category}');
+    return newTx;
+  } catch (e) {
+    print('createTransaction: $e');
+    rethrow;
   }
+}
 
-  // ✅ ИСПРАВЛЕННЫЙ МЕТОД — РАБОТАЕТ С GET /users/{userId}/transactions
   Future<List<Transaction>> getTransactions({DateTime? startDate, DateTime? endDate}) async {
     try {
-      // 🔹 НОВЫЙ ЭНДПОИНТ: userId уже в пути — никаких queryParameters не нужно
       final res = await _dio.get<Map<String, dynamic>>('/users/$userId/transactions');
       final data = res.data;
-
       if (data == null) {
-        print('⚠️ getTransactions: response data is null');
+        print('getTransactions: response data is null');
         return [];
       }
 
       final txList = data['transactions'];
       if (txList is! List) {
-        print('⚠️ getTransactions: expected "transactions": [...], got $data');
+        print('getTransactions: expected "transactions": [...], got $data');
         return [];
       }
 
@@ -209,12 +201,11 @@ class RealApiService {
 
       return _cachedTransactions = parsed;
     } catch (e) {
-      print('🔴 getTransactions: $e');
-      return _cachedTransactions; // fallback: old cache
+      print('getTransactions: $e');
+      return _cachedTransactions;
     }
   }
 
-  // Заглушки/остальное — без изменений:
   Future<List<Dividend>> getDividends() async => [
         Dividend(name: 'SBER', amount: 25.5, date: DateTime.now().subtract(const Duration(days: 3))),
         Dividend(name: 'VTBR', amount: 12.3, date: DateTime.now().subtract(const Duration(days: 10))),
@@ -223,41 +214,35 @@ class RealApiService {
   Future<List<ForecastPeriod>> getForecast({String period = 'TIME_PERIOD_MONTH', int periodsAhead = 3}) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
-  '/forecast',
-  data: {
-    'userId': userId,
-    'period': period,
-    'periodsAhead': periodsAhead,
-  },
-);
+        '/forecast',
+        data: {
+          'userId': userId,
+          'period': period,
+          'periodsAhead': periodsAhead,
+        },
+      );
       final forecasts = (res.data?['forecasts'] as List?) ?? [];
       return forecasts.map((f) => ForecastPeriod.fromJson(f)).toList();
     } catch (e) {
-      print('🔴 getForecast: $e');
+      print('getForecast: $e');
       return [];
     }
   }
 
-Future<Map<String, dynamic>> getAnalytics({DateTime? startDate, DateTime? endDate}) async {
-  try {
-    endDate ??= DateTime.now();
-    startDate ??= endDate.subtract(const Duration(days: 30));
-
-    // 🔥 ДОБАВЬ ЭТУ СТРОКУ:
-    final payload = {
-      'userId': userId,
-      'startDate': _toProtoTimestamp(startDate),
-      'endDate': _toProtoTimestamp(endDate),
-    };
-
-    final res = await _dio.post<Map<String, dynamic>>(
-      '/analytics',
-      data: payload, // ← теперь payload определён
-    );
-    return res.data ?? {};
-  } catch (e) {
-    print('🔴 getAnalytics: $e');
-    return {};
+  Future<Map<String, dynamic>> getAnalytics({DateTime? startDate, DateTime? endDate}) async {
+    try {
+      endDate ??= DateTime.now();
+      startDate ??= endDate.subtract(const Duration(days: 30));
+      final payload = {
+        'userId': userId,
+        'startDate': _toProtoTimestamp(startDate),
+        'endDate': _toProtoTimestamp(endDate),
+      };
+      final res = await _dio.post<Map<String, dynamic>>('/analytics', data: payload);
+      return res.data ?? {};
+    } catch (e) {
+      print('getAnalytics: $e');
+      return {};
+    }
   }
-}
 }

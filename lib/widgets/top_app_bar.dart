@@ -11,12 +11,14 @@ class TopAppBar extends StatefulWidget implements PreferredSizeWidget {
   final RealApiService api;
   final TopPage currentPage;
   final VoidCallback? onNotificationsPressed;
+  final Widget? leading; // ← Добавлено: поддержка leading (например, стрелки "назад")
 
   const TopAppBar({
     super.key,
     required this.api,
     required this.currentPage,
     this.onNotificationsPressed,
+    this.leading,
   });
 
   @override
@@ -27,78 +29,77 @@ class TopAppBar extends StatefulWidget implements PreferredSizeWidget {
 }
 
 class _TopAppBarState extends State<TopAppBar> {
-  final ValueNotifier<bool> _hoverNotifier = ValueNotifier(false);
-
-  @override
-  void dispose() {
-    _hoverNotifier.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppBar(
       backgroundColor: const Color(0xFF16213E),
       elevation: 0,
+      leading: widget.leading, // ← Используем leading, если задан
       title: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          GestureDetector(
-            onTap: widget.currentPage != TopPage.wallet
-                ? () => Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => WalletScreen(api: widget.api)),
-                    )
-                : null,
-            child: const Row(
-              children: [
-                Icon(Icons.account_balance_wallet_outlined, size: 24, color: Colors.white),
-                SizedBox(width: 4),
-                Text('FinTrack',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    )),
-              ],
+          // Показываем логотип и меню ТОЛЬКО если leading НЕ задан (главные экраны)
+          if (widget.leading == null)
+            GestureDetector(
+              onTap: widget.currentPage != TopPage.wallet
+                  ? () => Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => WalletScreen(api: widget.api)),
+                      )
+                  : null,
+              child: const Row(
+                children: [
+                  Icon(Icons.account_balance_wallet_outlined, size: 24, color: Colors.white),
+                  SizedBox(width: 4),
+                  Text('FinTrack',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      )),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 24),
-          _topMenuButton(
-            context: context,
-            label: 'Кошелек',
-            icon: Icons.account_balance_wallet_outlined,
-            isActive: widget.currentPage == TopPage.wallet,
-            onTap: widget.currentPage != TopPage.wallet
-                ? () => Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => WalletScreen(api: widget.api)),
-                    )
-                : null,
-          ),
-          _topMenuButton(
-            context: context,
-            label: 'Инвестиции',
-            icon: Icons.trending_up_outlined,
-            isActive: widget.currentPage == TopPage.investments,
-            onTap: widget.currentPage != TopPage.investments
-                ? () => Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => InvestmentsScreen(api: widget.api)),
-                    )
-                : null,
-          ),
-          _topMenuButton(
-            context: context,
-            label: 'Настройки',
-            icon: Icons.settings_outlined,
-            isActive: widget.currentPage == TopPage.settings,
-            onTap: widget.currentPage != TopPage.settings
-                ? () => Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => SettingsScreen(api: widget.api)),
-                    )
-                : null,
-          ),
+          if (widget.leading == null) const SizedBox(width: 24),
+          if (widget.leading == null)
+            ...[
+              _topMenuButton(
+                context: context,
+                label: 'Кошелек',
+                icon: Icons.account_balance_wallet_outlined,
+                isActive: widget.currentPage == TopPage.wallet,
+                onTap: widget.currentPage != TopPage.wallet
+                    ? () => Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => WalletScreen(api: widget.api)),
+                        )
+                    : null,
+              ),
+              _topMenuButton(
+                context: context,
+                label: 'Инвестиции',
+                icon: Icons.trending_up_outlined,
+                isActive: widget.currentPage == TopPage.investments,
+                onTap: widget.currentPage != TopPage.investments
+                    ? () => Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => InvestmentsScreen(api: widget.api)),
+                        )
+                    : null,
+              ),
+              _topMenuButton(
+                context: context,
+                label: 'Настройки',
+                icon: Icons.settings_outlined,
+                isActive: widget.currentPage == TopPage.settings,
+                onTap: widget.currentPage != TopPage.settings
+                    ? () => Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => SettingsScreen(api: widget.api)),
+                        )
+                    : null,
+              ),
+            ],
         ],
       ),
       actions: [
@@ -123,9 +124,9 @@ class _TopAppBarState extends State<TopAppBar> {
     required bool isActive,
     VoidCallback? onTap,
   }) {
-    bool isHovered = false;
     return StatefulBuilder(
       builder: (context, setState) {
+        bool isHovered = false;
         return MouseRegion(
           cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
           onEnter: (_) => setState(() => isHovered = true),

@@ -11,31 +11,24 @@ import 'package:fintrack/widgets/top_app_bar.dart';
 import 'package:fintrack/screens/income_screen.dart';
 import 'package:fintrack/screens/expense_screen.dart';
 
-/// Форматирует сумму: 123456 → '123 456 ₽'
-/// withSign: true → '+123 456 ₽' / '−12 345 ₽'
+/// Утилита форматирования
 String formatRubles(double amount, {bool withSign = false}) {
-  if (amount == 0) {
-    return withSign ? '0 ₽' : '0 ₽';
-  }
-
+  if (amount == 0) return withSign ? '0 ₽' : '0 ₽';
   final isNegative = amount < 0;
   final abs = amount.abs().toInt();
-
   final digits = abs.toString().split('').reversed.toList();
   final buffer = StringBuffer();
   for (int i = 0; i < digits.length; i++) {
     if (i > 0 && i % 3 == 0) buffer.write(' ');
     buffer.write(digits[i]);
   }
-  final formatted = buffer.toString().split('').reversed.join('');
-
+  final formatted = buffer.toString().split('').reversed.join();
   String result = formatted;
   if (withSign) {
     result = '${isNegative ? '−' : '+'}$result';
   } else if (isNegative) {
     result = '−$result';
   }
-
   return '$result ₽';
 }
 
@@ -52,8 +45,9 @@ class _WalletScreenState extends State<WalletScreen> {
   double wallet = 0;
   double investments = 0;
   List<Transaction> transactions = [];
+  List<Account> accounts = []; // ← кэшируем счета
 
-  // 🔹 Ручные балансы по банкам (можно редактировать)
+  // 🔹 Ручные балансы по банкам (редактируются)
   final Map<String, double> _bankBalances = {
     'Т-банк': 15765.0,
     'Сбербанк': 24310.0,
@@ -62,13 +56,6 @@ class _WalletScreenState extends State<WalletScreen> {
   };
 
   int _selectedPeriod = 0;
-
-  final Map<String, String> _accountIdMap = {
-    'acc_cash': 'a1111111-1111-1111-1111-111111111111',
-    'acc_tbank': 'a1111111-1111-1111-1111-111111111111',
-    'acc_sber': 'a1111111-1111-1111-1111-111111111112',
-    'acc_vtb': 'a1111111-1111-1111-1111-111111111111',
-  };
 
   @override
   void initState() {
@@ -81,11 +68,13 @@ class _WalletScreenState extends State<WalletScreen> {
     try {
       final balance = await api.getBalance();
       final txs = await api.getTransactions();
+      final accs = await api.getAccounts(); // ← загружаем счета
       if (mounted) {
         setState(() {
           wallet = balance.wallet;
           investments = balance.investments;
           transactions = txs;
+          accounts = accs;
         });
       }
     } catch (e) {
@@ -133,31 +122,34 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  String _getCategoryName(String id) {
-    final map = {
-      'cat_salary': 'Зарплата',
-      'cat_food': 'Еда',
-      'cat_transport': 'Транспорт',
-      'cat_freelance': 'Подработка',
-      'cat_rent': 'Аренда',
-      'cat_dividends': 'Дивиденды',
-      'cat_crypto': 'Криптовалюта',
-      'cat_shopping': 'Покупки',
-      'cat_entertainment': 'Развлечения',
-    };
-    return map[id] ?? 'Другое';
-  }
+    void _showAddTransaction() async {
+  try {
+    final accounts = await api.getAccounts();
 
-  void _showAddTransaction() async {
-    final categories = await api.getCategories();
-    String selectedCategoryId = categories.isNotEmpty ? categories.first.id : 'cat_other';
+    if (accounts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет счетов')));
+      return;
+    }
+
+    String selectedAccountId = accounts.first.id;
     String selectedType = 'income';
+    String previewCategory = 'Зарплата';
+
     final amountController = TextEditingController();
-    final fromAccountController = TextEditingController(text: 'acc_cash');
     final dateController = TextEditingController(
       text: DateTime.now().toLocal().toIso8601String().split('T')[0],
     );
     final descriptionController = TextEditingController();
+
+    void updatePreview() {
+      final desc = descriptionController.text;
+      final apiType = selectedType == 'income' ? 'INCOME' : 'EXPENSE';
+      final info = determineCategory(apiType: apiType, description: desc);
+      previewCategory = info.name;
+    }
+
+    updatePreview();
+    descriptionController.addListener(updatePreview);
 
     showDialog(
       context: context,
@@ -166,7 +158,7 @@ class _WalletScreenState extends State<WalletScreen> {
           backgroundColor: const Color(0xFF1A1A2E),
           title: const Text('Добавить операцию', style: TextStyle(color: Colors.white)),
           content: SizedBox(
-            width: 320,
+            width: 300,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -174,7 +166,7 @@ class _WalletScreenState extends State<WalletScreen> {
                   TextField(
                     controller: amountController,
                     decoration: InputDecoration(
-                      labelText: 'Сумма (₽)',
+                      labelText: 'Сумма',
                       labelStyle: const TextStyle(color: Colors.white),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -183,41 +175,98 @@ class _WalletScreenState extends State<WalletScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedCategoryId,
+                    value: selectedAccountId,
                     decoration: InputDecoration(
-                      labelText: 'Категория',
+                      labelText: 'Счёт',
                       labelStyle: const TextStyle(color: Colors.white),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    items: categories.map((cat) => DropdownMenuItem(
-                      value: cat.id,
-                      child: Text(cat.name, style: const TextStyle(color: Colors.white)),
-                    )).toList(),
-                    onChanged: (v) => setState(() => selectedCategoryId = v!),
+                    items: accounts.map((acc) {
+                      return DropdownMenuItem(
+                        value: acc.id,
+                        child: Text(
+                          acc.name,
+                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selectedAccountId = value);
+                      }
+                    },
                     dropdownColor: const Color(0xFF1A1A2E),
                     style: const TextStyle(color: Colors.white),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: fromAccountController,
-                    decoration: InputDecoration(
-                      labelText: 'ID счёта',
-                      helperText: 'acc_cash, acc_tbank и др.',
-                      helperStyle: const TextStyle(fontSize: 10, color: Colors.grey),
-                      labelStyle: const TextStyle(color: Colors.white),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    style: const TextStyle(color: Colors.white),
+                  const Text('Тип операции', style: TextStyle(color: Colors.white)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              selectedType = 'income';
+                              updatePreview();
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: selectedType == 'income' ? Colors.green.withOpacity(0.3) : Colors.grey[800],
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Доход', style: TextStyle(fontSize: 14, color: Colors.white)),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              selectedType = 'expense';
+                              updatePreview();
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: selectedType == 'expense' ? Colors.red.withOpacity(0.3) : Colors.grey[800],
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Расход', style: TextStyle(fontSize: 14, color: Colors.white)),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: descriptionController,
                     decoration: InputDecoration(
-                      labelText: 'Описание',
+                      labelText: 'Описание (напр. «Зарплата», «Кофе»)',
                       labelStyle: const TextStyle(color: Colors.white),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     style: const TextStyle(color: Colors.white),
+                    onChanged: (value) => updatePreview(),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[850],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.category, size: 16, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Категория: $previewCategory',
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -230,40 +279,6 @@ class _WalletScreenState extends State<WalletScreen> {
                     style: const TextStyle(color: Colors.white),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Тип операции', style: TextStyle(color: Colors.white)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => setState(() => selectedType = 'income'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: selectedType == 'income'
-                                ? Colors.green.withOpacity(0.3)
-                                : Colors.grey[800],
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Text('Доход', style: TextStyle(fontSize: 14, color: Colors.white)),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => setState(() => selectedType = 'expense'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: selectedType == 'expense'
-                                ? Colors.red.withOpacity(0.3)
-                                : Colors.grey[800],
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Text('Расход', style: TextStyle(fontSize: 14, color: Colors.white)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
@@ -274,62 +289,43 @@ class _WalletScreenState extends State<WalletScreen> {
                           ),
                           onPressed: () {
                             final amountStr = amountController.text.trim();
-                            final fromAccountIdRaw = fromAccountController.text.trim();
-
                             if (amountStr.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Введите сумму')),
+                                const SnackBar(content: Text('Заполните сумму')),
                               );
                               return;
                             }
-                            if (selectedCategoryId.isEmpty || selectedCategoryId == 'cat_other') {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Выберите категорию')),
-                              );
-                              return;
-                            }
-                            if (fromAccountIdRaw.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Укажите ID счёта')),
-                              );
-                              return;
-                            }
-
                             final amount = double.tryParse(amountStr);
-                            if (amount == null || amount <= 0) {
+                            if (amount == null || amount == 0) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Сумма должна быть > 0')),
+                                const SnackBar(content: Text('Некорректная сумма')),
                               );
                               return;
                             }
 
-                            final fromAccountId = _accountIdMap[fromAccountIdRaw] ?? fromAccountIdRaw;
-                            final date = DateTime.tryParse('${dateController.text}T12:00:00') ??
-                                DateTime.now();
-
-                            String apiType = selectedType == 'income'
+                            final date = DateTime.tryParse('${dateController.text}T12:00:00') ?? DateTime.now();
+                            final apiType = selectedType == 'income'
                                 ? 'TRANSACTION_TYPE_INCOME'
                                 : 'TRANSACTION_TYPE_EXPENSE';
 
                             api.createTransaction(
                               amount: amount,
-                              categoryId: selectedCategoryId,
-                              fromAccountId: fromAccountId,
+                              fromAccountId: selectedAccountId,
                               date: date,
                               description: descriptionController.text.trim(),
                               type: apiType,
-                            ).then((serverTx) {
+                            ).then((newTx) {
                               if (mounted) {
-                                _loadData();
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('✅ Операция добавлена')),
+                                  SnackBar(content: Text('${newTx.category}: ${formatRubles(newTx.amount)}')),
                                 );
                                 Navigator.pop(context);
+                                _loadData();
                               }
                             }).catchError((e) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('❌ $e')),
+                                  SnackBar(content: Text('$e')),
                                 );
                               }
                             });
@@ -346,7 +342,14 @@ class _WalletScreenState extends State<WalletScreen> {
         ),
       ),
     );
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось загрузить счёта')),
+      );
+    }
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -410,83 +413,87 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Widget _buildCenterPanel() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const SizedBox(height: 20),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 200,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => HistoryScreen(api: api)),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF16213E),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Center(child: Text('Операции')),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => ExpenseScreen(api: api)),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF16213E),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Center(child: Text('Расходы по категориям')),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => IncomeScreen(api: api)),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF16213E),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Center(child: Text('Доходы по категориям')),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
+  return SingleChildScrollView(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(height: 20),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 250,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 90),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _monthlySummary(),
-                    const SizedBox(height: 20),
-                    _addTransactionButton(),
+                    ElevatedButton(
+                      onPressed: () {},
+                      style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF16213E),
+                            foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      minimumSize: const Size(double.infinity, 56),
+                                ),
+                                  child: Container(
+                                 alignment: Alignment.centerLeft,
+                                      padding: const EdgeInsets.only(left: 16),
+                                        child: const Text('Операции'),
+                                        ),
+                              ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+  onPressed: () {},
+  style: ElevatedButton.styleFrom(
+    backgroundColor: const Color(0xFF16213E),
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    minimumSize: const Size(double.infinity, 56),
+  ),
+  child: Container(
+    alignment: Alignment.centerLeft,
+    padding: const EdgeInsets.only(left: 16),
+    child: const Text('Расходы по категориям'),
+  ),
+),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+  onPressed: () {},
+  style: ElevatedButton.styleFrom(
+    backgroundColor: const Color(0xFF16213E),
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    minimumSize: const Size(double.infinity, 56),
+  ),
+  child: Container(
+    alignment: Alignment.centerLeft,
+    padding: const EdgeInsets.only(left: 16),
+    child: const Text('Доходы по категориям'),
+  ),
+),
                   ],
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _monthlySummary(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildRightPanel() {
     return Container(
@@ -503,9 +510,7 @@ class _WalletScreenState extends State<WalletScreen> {
             mainAxisSpacing: 8,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            children: _bankBalances.entries.map((e) {
-              return _buildBankCard(e.key, e.value);
-            }).toList(),
+            children: _bankBalances.entries.map((e) => _buildBankCard(e.key, e.value)).toList(),
           ),
           const SizedBox(height: 20),
           Card(
@@ -584,7 +589,6 @@ class _WalletScreenState extends State<WalletScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Итоги за месяц', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white)),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -624,13 +628,25 @@ class _WalletScreenState extends State<WalletScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-                Text(
-                  dateString,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      dateString,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    if (dateString == 'Сегодня')
+                      ElevatedButton.icon(
+                        onPressed: _showAddTransaction,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF16213E),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                        label: const Text('Добавить', style: TextStyle(fontSize: 12, color: Colors.white)),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 ...txs.map(_buildTransactionTile).toList(),
@@ -638,21 +654,6 @@ class _WalletScreenState extends State<WalletScreen> {
             );
           }),
         ],
-      ),
-    );
-  }
-
-  Widget _addTransactionButton() {
-    return Center(
-      child: ElevatedButton.icon(
-        onPressed: _showAddTransaction,
-        icon: const Icon(Icons.add, size: 18),
-        label: const Text('Добавить операцию', style: TextStyle(fontSize: 16, color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF16213E),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
       ),
     );
   }
@@ -742,28 +743,28 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Widget _buildTransactionTile(Transaction t) {
-    return Card(
-      color: Colors.grey[850],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        title: Text(
-          t.description.isNotEmpty ? t.description : t.category,
-          style: const TextStyle(color: Colors.white),
-        ),
-        subtitle: Text(
-          '${t.date.day}.${t.date.month}.${t.date.year}',
-          style: const TextStyle(color: Colors.grey),
-        ),
-        trailing: Text(
-          formatRubles(t.amount, withSign: true),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: t.amount >= 0 ? Colors.green : Colors.red,
-          ),
+  return Card(
+    color: Colors.grey[850],
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    child: ListTile(
+      title: Text(
+        t.category,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        '${t.date.day}.${t.date.month}.${t.date.year} • ${t.description}',
+        style: const TextStyle(color: Colors.grey, fontSize: 12),
+      ),
+      trailing: Text(
+        formatRubles(t.amount, withSign: true),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: t.amount >= 0 ? Colors.green : Colors.red,
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Map<DateTime, List<Transaction>> _groupTransactionsByDateLast3Days(List<Transaction> transactions) {
     final grouped = <DateTime, List<Transaction>>{};
@@ -789,8 +790,10 @@ class _WalletScreenState extends State<WalletScreen> {
     if (date == today) return 'Сегодня';
     if (date == yesterday) return 'Вчера';
     if (date == twoDaysAgo) return 'Позавчера';
-    const months = ['', 'января', 'февраля', 'марта', 'апреля', 'мая',
-      'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    const months = [
+      '', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
+      'августа', 'сентября', 'октября', 'ноября', 'декабря'
+    ];
     return '${date.day} ${months[date.month]}';
   }
 
