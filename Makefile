@@ -3,6 +3,10 @@
 build-img:
 	docker build . -f deployment/Dockerfile -t frontend --load
 
+.PHONY: build-img
+build-img-lin:
+	docker build . -f deployment/Dockerfile -t frontend
+
 .PHONY: upload-img
 upload-img:
 	docker tag frontend:latest cr.yandex/crpkimlhn85fg9vjfj7l/frontend:latest
