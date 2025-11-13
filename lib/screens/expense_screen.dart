@@ -11,6 +11,7 @@ class ExpenseScreen extends StatefulWidget {
   final RealApiService api;
   final String? title;
   const ExpenseScreen({super.key, required this.api, this.title = 'Расходы'});
+
   @override
   State<ExpenseScreen> createState() => _ExpenseScreenState();
 }
@@ -44,150 +45,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             .showSnackBar(const SnackBar(content: Text('⚠️ Ошибка загрузки расходов')));
       }
     }
-  }
-
-  void _showAddTransaction() async {
-    final categories = await api.getCategories();
-    String selectedCategoryId = categories.first.id;
-
-    final amountController = TextEditingController();
-    final fromAccountController = TextEditingController(text: 'acc_cash');
-    final dateController = TextEditingController(
-      text: DateTime.now().toLocal().toIso8601String().split('T')[0],
-    );
-    final descriptionController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Добавить расход', style: TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: 300,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: amountController,
-                decoration: InputDecoration(
-                  labelText: 'Сумма (₽)',
-                  labelStyle: const TextStyle(color: Colors.white),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                style: const TextStyle(color: Colors.white),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              DropdownButton<String>(
-  value: selectedCategoryId,
-  items: categories.map((cat) {
-    return DropdownMenuItem(
-      value: cat.id,
-      child: Text(
-        cat.name,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-      ),
-    );
-  }).toList(),
-  onChanged: (value) {
-    if (value != null) {
-      selectedCategoryId = value;
-    }
-  },
-  dropdownColor: const Color(0xFF1A1A2E),
-  style: const TextStyle(color: Colors.black, fontSize: 16),
-  underline: Container(),
-),
-              const SizedBox(height: 12),
-              TextField(
-                controller: fromAccountController,
-                decoration: InputDecoration(
-                  labelText: 'ID счёта',
-                  helperText: 'acc_cash, acc_tbank и др.',
-                  helperStyle: const TextStyle(fontSize: 10, color: Colors.grey),
-                  labelStyle: const TextStyle(color: Colors.white),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descriptionController,
-                decoration: InputDecoration(
-                  labelText: 'Описание',
-                  labelStyle: const TextStyle(color: Colors.white),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: dateController,
-                decoration: InputDecoration(
-                  labelText: 'Дата',
-                  labelStyle: const TextStyle(color: Colors.white),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C4B4),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        final amountStr = amountController.text.trim();
-                        final accId = fromAccountController.text.trim();
-                        if (amountStr.isEmpty || accId.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Заполните сумму и счёт')),
-                          );
-                          return;
-                        }
-                        final amount = double.tryParse(amountStr) ?? 0.0;
-                        if (amount <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Сумма должна быть > 0')),
-                          );
-                          return;
-                        }
-                        final date = DateTime.tryParse('${dateController.text}T12:00:00') ?? DateTime.now();
-                        api.createTransaction(
-                          amount: -amount,
-                          categoryId: selectedCategoryId,
-                          fromAccountId: accId,
-                          date: date,
-                          description: descriptionController.text.trim(),
-                        ).then((_) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('✅ Расход добавлен')),
-                            );
-                            Navigator.pop(context);
-                            _loadData();
-                          }
-                        }).catchError((e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('❌ $e')), // ← будет видна настоящая ошибка
-                            );
-                          }
-                        });
-                      },
-                      child: const Text('Сохранить', style: TextStyle(color: Colors.white)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -290,6 +147,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         showTitle: false,
       );
     }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -324,18 +182,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           }).toList(),
         ),
         const SizedBox(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Последние расходы',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white)),
-            TextButton.icon(
-              onPressed: _showAddTransaction,
-              icon: const Icon(Icons.add, size: 16, color: Colors.red),
-              label: const Text('Добавить', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        ),
+        const Text('Последние расходы',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white)),
         const SizedBox(height: 12),
         ...expenses.take(5).map(_buildTransactionTile),
       ],
@@ -353,7 +201,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           final f = entry.value;
           return _buildForecastCard(
             title: f.formatPeriodName(),
-            subtitle: 'Ожидаемо: -${f.expectedExpense.toStringAsFixed(0)} ₽',
+            subtitle: 'Ожидаемо: −${f.expectedExpense.toStringAsFixed(0)} ₽',
             color: Colors.red,
             onTap: () {
               final expenseCats = f.categoryBreakdown
@@ -368,18 +216,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             },
           );
         }).toList(),
-        const SizedBox(height: 24),
-        ElevatedButton.icon(
-          onPressed: _showAddTransaction,
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Добавить план'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red.withOpacity(0.2),
-            foregroundColor: Colors.red,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          ),
-        ),
       ],
     );
   }
@@ -408,7 +244,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.grey[900], // ← Цвет фона
+      color: Colors.grey[900],
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -467,7 +303,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           ),
           const Spacer(),
           Text(
-            '-${t.amount.abs().toStringAsFixed(0)} ₽',
+            '${t.amount.sign == 1 ? '+' : '−'}${t.amount.abs().toStringAsFixed(0)} ₽',
             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
           ),
         ],

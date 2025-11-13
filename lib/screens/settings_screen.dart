@@ -1,8 +1,7 @@
 // lib/screens/settings_screen.dart
 import 'package:flutter/material.dart';
-import 'package:fintrack/screens/wallet_screen.dart';
-import 'package:fintrack/screens/investments_screen.dart';
 import 'package:fintrack/services/real_api_service.dart';
+import 'package:fintrack/widgets/top_app_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
   final RealApiService api;
@@ -18,106 +17,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    api = widget.api; // ← Инициализация api
+    api = widget.api;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
+      appBar: TopAppBar(
+        api: api,
+        currentPage: TopPage.settings,
+        onNotificationsPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('🔔 Уведомления — Coming Soon')),
+          );
+        },
+      ),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 64,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF16213E),
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Интеграции', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 24),
+              _buildIntegrationCard(
+                icon: Icons.account_balance,
+                title: 'Т-Банк',
+                subtitle: 'Подключите счёт для автоматической загрузки операций',
+                color: Colors.blue,
               ),
-              child: Row(
-                children: [
-                  const Text('FinTrack', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                  const SizedBox(width: 24),
-                  GestureDetector(
-                    onTap: () => Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => WalletScreen(api: api))),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.account_balance_wallet_outlined, size: 20, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text('Кошелек', style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  GestureDetector(
-                    onTap: () => Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => InvestmentsScreen(api: api))),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.trending_up_outlined, size: 20, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text('Инвестиции', style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Настройки — неактивна
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.settings_outlined, size: 20, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text('Настройки', style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                      icon: const Icon(Icons.notifications_outlined, size: 24, color: Colors.white),
-                      onPressed: () {}),
-                  const CircleAvatar(
-                      radius: 14,
-                      backgroundColor: Color(0xFF3C4759),
-                      child: Icon(Icons.person, size: 16, color: Colors.white)),
-                ],
+              const SizedBox(height: 16),
+              _buildIntegrationCard(
+                icon: Icons.analytics,
+                title: 'Т-Инвестиции',
+                subtitle: 'Синхронизация портфеля и дивидендов',
+                color: Colors.green,
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Интеграции', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                    const SizedBox(height: 24),
-                    _buildIntegrationCard(
-                      icon: Icons.account_balance,
-                      title: 'Т-Банк',
-                      subtitle: 'Подключите счёт для автоматической загрузки операций',
-                      color: Colors.blue,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildIntegrationCard(
-                      icon: Icons.analytics,
-                      title: 'Т-Инвестиции',
-                      subtitle: 'Синхронизация портфеля и дивидендов',
-                      color: Colors.green,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
