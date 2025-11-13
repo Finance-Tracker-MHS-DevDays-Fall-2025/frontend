@@ -1,0 +1,12 @@
+.git
+.gitignore
+README.md
+.idea
+.vscode
+*.iml
+.dart_tool
+.packages
+build
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
