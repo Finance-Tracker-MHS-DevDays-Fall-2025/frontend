@@ -11,8 +11,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _usernameController = TextEditingController(text: 'vlad');
-  final TextEditingController _passwordController = TextEditingController(text: '123');
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   void _login() {
     final username = _usernameController.text.trim();
@@ -23,10 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // ✅ Создаём RealApiService один раз — с любым userId
     final api = RealApiService(userId: username);
-    api.initializeWithMocksIfEmpty(); // если нет localStorage — инициализируем моками
-
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => WalletScreen(api: api)),

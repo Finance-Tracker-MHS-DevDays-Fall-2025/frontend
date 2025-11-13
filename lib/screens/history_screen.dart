@@ -6,7 +6,6 @@ import 'package:fintrack/models/transaction.dart';
 class HistoryScreen extends StatefulWidget {
   final RealApiService api;
   const HistoryScreen({super.key, required this.api});
-
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
@@ -27,15 +26,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final txs = await api.getTransactions();
       if (mounted) setState(() => transactions = txs);
     } catch (e) {
-      print('❌ HistoryScreen load error: $e');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Ошибка загрузки операций')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Ошибка загрузки операций')));
+      }
     }
   }
 
-  void _showAddTransaction() {
+  void _showAddTransaction() async {
+    final categories = await api.getCategories();
+    String selectedCategoryId = categories.first.id;
+
     final amountController = TextEditingController();
-    final categoryController = TextEditingController(text: 'cat_food');
     final fromAccountController = TextEditingController(text: 'acc_cash');
     final dateController = TextEditingController(
       text: DateTime.now().toLocal().toIso8601String().split('T')[0],
@@ -63,15 +65,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: categoryController,
-                decoration: InputDecoration(
-                  labelText: 'ID категории',
-                  labelStyle: const TextStyle(color: Colors.white),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
+              DropdownButton<String>(
+  value: selectedCategoryId,
+  items: categories.map((cat) {
+    return DropdownMenuItem(
+      value: cat.id,
+      child: Text(
+        cat.name,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+      ),
+    );
+  }).toList(),
+  onChanged: (value) {
+    if (value != null) {
+      selectedCategoryId = value;
+    }
+  },
+  dropdownColor: const Color(0xFF1A1A2E),
+  style: const TextStyle(color: Colors.black, fontSize: 16),
+  underline: Container(),
+),
               const SizedBox(height: 12),
               TextField(
                 controller: fromAccountController,
@@ -113,11 +126,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       onPressed: () {
                         final amountStr = amountController.text.trim();
-                        final cat = categoryController.text.trim();
-                        final acc = fromAccountController.text.trim();
-                        if (amountStr.isEmpty || cat.isEmpty || acc.isEmpty) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('Заполните все поля')));
+                        final accId = fromAccountController.text.trim();
+                        if (amountStr.isEmpty || accId.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Заполните сумму и счёт')),
+                          );
                           return;
                         }
                         final amount = double.tryParse(amountStr) ?? 0.0;
@@ -125,18 +138,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         final date = DateTime.tryParse('${dateController.text}T12:00:00') ?? DateTime.now();
                         api.createTransaction(
                           amount: amount,
-                          categoryId: cat,
-                          fromAccountId: acc,
+                          categoryId: selectedCategoryId,
+                          fromAccountId: accId,
                           date: date,
                           description: descriptionController.text.trim(),
                         ).then((_) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('✅ Операция добавлена')));
-                          Navigator.pop(context);
-                          _loadData();
-                        }).catchError((_) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('❌ Ошибка API')));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('✅ Операция добавлена')),
+                            );
+                            Navigator.pop(context);
+                            _loadData();
+                          }
+                        }).catchError((e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('❌ $e')), // ← будет видна настоящая ошибка
+                            );
+                          }
                         });
                       },
                       child: const Text('Сохранить', style: TextStyle(color: Colors.white)),

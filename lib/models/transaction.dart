@@ -1,4 +1,3 @@
-// lib/models/transaction.dart
 class Transaction {
   final String? id;
   final DateTime date;
@@ -45,7 +44,7 @@ class Transaction {
         category: json['category'] as String,
         categoryId: json['categoryId'] as String? ?? '',
         source: json['source'] as String,
-        fromAccountId: json['fromAccountId'] as String? ?? 'default-cash',
+        fromAccountId: json['fromAccountId'] as String? ?? '',
         toAccountId: json['toAccountId'] as String? ?? '',
         description: json['description'] as String? ?? '',
       );

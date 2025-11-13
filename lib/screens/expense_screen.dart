@@ -11,7 +11,6 @@ class ExpenseScreen extends StatefulWidget {
   final RealApiService api;
   final String? title;
   const ExpenseScreen({super.key, required this.api, this.title = 'Расходы'});
-
   @override
   State<ExpenseScreen> createState() => _ExpenseScreenState();
 }
@@ -40,15 +39,18 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         });
       }
     } catch (e) {
-      print('❌ ExpenseScreen _loadData error: $e');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('⚠️ Ошибка загрузки расходов и прогноза')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('⚠️ Ошибка загрузки расходов')));
+      }
     }
   }
 
-  void _showAddTransaction() {
+  void _showAddTransaction() async {
+    final categories = await api.getCategories();
+    String selectedCategoryId = categories.first.id;
+
     final amountController = TextEditingController();
-    final categoryController = TextEditingController(text: 'cat_food');
     final fromAccountController = TextEditingController(text: 'acc_cash');
     final dateController = TextEditingController(
       text: DateTime.now().toLocal().toIso8601String().split('T')[0],
@@ -76,23 +78,32 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: categoryController,
-                decoration: InputDecoration(
-                  labelText: 'ID категории',
-                  helperText: 'cat_food, cat_transport, cat_rent...',
-                  helperStyle: const TextStyle(fontSize: 10, color: Colors.grey),
-                  labelStyle: const TextStyle(color: Colors.white),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
+              DropdownButton<String>(
+  value: selectedCategoryId,
+  items: categories.map((cat) {
+    return DropdownMenuItem(
+      value: cat.id,
+      child: Text(
+        cat.name,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+      ),
+    );
+  }).toList(),
+  onChanged: (value) {
+    if (value != null) {
+      selectedCategoryId = value;
+    }
+  },
+  dropdownColor: const Color(0xFF1A1A2E),
+  style: const TextStyle(color: Colors.black, fontSize: 16),
+  underline: Container(),
+),
               const SizedBox(height: 12),
               TextField(
                 controller: fromAccountController,
                 decoration: InputDecoration(
                   labelText: 'ID счёта',
-                  helperText: 'acc_cash, acc_tbank, acc_sber...',
+                  helperText: 'acc_cash, acc_tbank и др.',
                   helperStyle: const TextStyle(fontSize: 10, color: Colors.grey),
                   labelStyle: const TextStyle(color: Colors.white),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -130,35 +141,41 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                       ),
                       onPressed: () {
                         final amountStr = amountController.text.trim();
-                        final catId = categoryController.text.trim();
                         final accId = fromAccountController.text.trim();
-                        if (amountStr.isEmpty || catId.isEmpty || accId.isEmpty) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('Заполните все обязательные поля')));
+                        if (amountStr.isEmpty || accId.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Заполните сумму и счёт')),
+                          );
                           return;
                         }
                         final amount = double.tryParse(amountStr) ?? 0.0;
                         if (amount <= 0) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('Сумма должна быть > 0')));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Сумма должна быть > 0')),
+                          );
                           return;
                         }
-                        final date = DateTime.tryParse('${dateController.text}T12:00:00') ??
-                            DateTime.now();
+                        final date = DateTime.tryParse('${dateController.text}T12:00:00') ?? DateTime.now();
                         api.createTransaction(
                           amount: -amount,
-                          categoryId: catId,
+                          categoryId: selectedCategoryId,
                           fromAccountId: accId,
                           date: date,
                           description: descriptionController.text.trim(),
                         ).then((_) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('✅ Расход добавлен')));
-                          Navigator.pop(context);
-                          _loadData();
-                        }).catchError((_) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('❌ Ошибка сохранения')));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('✅ Расход добавлен')),
+                            );
+                            Navigator.pop(context);
+                            _loadData();
+                          }
+                        }).catchError((e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('❌ $e')), // ← будет видна настоящая ошибка
+                            );
+                          }
                         });
                       },
                       child: const Text('Сохранить', style: TextStyle(color: Colors.white)),
@@ -185,20 +202,14 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           IconButton(
             icon: const Icon(Icons.trending_up_outlined, size: 24, color: Colors.white),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => InvestmentsScreen(api: api)),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (_) => InvestmentsScreen(api: api)));
             },
           ),
           const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 24, color: Colors.white),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => SettingsScreen(api: api)),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(api: api)));
             },
           ),
           const SizedBox(width: 8),
@@ -339,7 +350,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white)),
         const SizedBox(height: 12),
         ...forecastPeriods.asMap().entries.map((entry) {
-          final i = entry.key;
           final f = entry.value;
           return _buildForecastCard(
             title: f.formatPeriodName(),
@@ -350,12 +360,9 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                   .where((c) => c.totalAmount > 0)
                   .map((c) => '${_getCategoryName(c.categoryId)}: ${c.totalAmount.toStringAsFixed(0)} ₽')
                   .join('\n');
-              if (expenseCats.isNotEmpty) {
+              if (expenseCats.isNotEmpty && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('По категориям:\n$expenseCats'),
-                    duration: const Duration(seconds: 4),
-                  ),
+                  SnackBar(content: Text('По категориям:\n$expenseCats')),
                 );
               }
             },
@@ -401,7 +408,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.grey[900],
+      color: Colors.grey[900], // ← Цвет фона
       child: InkWell(
         onTap: onTap,
         child: Padding(

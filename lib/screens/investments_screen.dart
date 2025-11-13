@@ -5,7 +5,6 @@ import 'package:fintrack/screens/wallet_screen.dart';
 import 'package:fintrack/screens/settings_screen.dart';
 import 'package:fintrack/services/real_api_service.dart';
 import 'package:fintrack/models/dividend.dart';
-import 'package:fintrack/models/balance.dart';
 
 class InvestmentsScreen extends StatefulWidget {
   final RealApiService api;
@@ -15,43 +14,16 @@ class InvestmentsScreen extends StatefulWidget {
   State<InvestmentsScreen> createState() => _InvestmentsScreenState();
 }
 
-class _InvestmentsScreenState extends State<InvestmentsScreen> {
+class _InvestmentsScreenState extends State<InvestmentsScreen>
+    with SingleTickerProviderStateMixin {
   late final RealApiService api;
+  late final TabController _tabController;
+
   double portfolioValue = 0;
   double profit = 0;
   double passiveIncome = 0;
   List<Dividend> dividends = [];
-  BalanceSummary? balance;
-  int? _selectedAssetIndex;
-  Offset? _tooltipPosition;
-
-  @override
-  void initState() {
-    super.initState();
-    api = widget.api;
-    _loadData();
-  }
-
-  void _loadData() async {
-    try {
-      final bal = await api.getBalance();
-      final divs = await api.getDividends();
-      if (mounted) {
-        setState(() {
-          balance = bal;
-          dividends = divs;
-          portfolioValue = bal.investments + 95000;
-          profit = 12000;
-          passiveIncome = divs.fold(0.0, (sum, d) => sum + d.amount);
-        });
-      }
-    } catch (e) {
-      print('❌ InvestmentsScreen _loadData error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Ошибка загрузки инвестиций')),
-      );
-    }
-  }
+  int? touchedIndex;
 
   final List<Map<String, dynamic>> _assets = [
     {'name': 'Акции RU', 'value': 195810.0, 'profit': '+61707.74 ₽', 'share': '14.73%'},
@@ -60,6 +32,7 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
     {'name': 'Криптовалюта', 'value': 169779.0, 'profit': '-26339.12 ₽', 'share': '12.77%'},
     {'name': 'Валюта', 'value': 41545.0, 'profit': '-', 'share': '3.13%'},
   ];
+
   final List<Color> _colors = [
     const Color(0xFF4A90E2),
     const Color(0xFF00C4B4),
@@ -69,6 +42,41 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    api = widget.api;
+    _tabController = TabController(length: 3, vsync: this);
+    _loadData();
+  }
+
+  void _loadData() async {
+    try {
+      final bal = await api.getBalance();
+      final divs = await api.getDividends();
+      if (mounted) {
+        setState(() {
+          portfolioValue = (bal.investments ?? 0) + 95000;
+          profit = 12000;
+          passiveIncome = divs.fold(0.0, (sum, d) => sum + (d.amount ?? 0));
+          dividends = divs;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('⚠️ Ошибка загрузки инвестиций')),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
@@ -76,148 +84,26 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 64,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF16213E),
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: Row(
-                children: [
-                  const Text('FinTrack', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                  const SizedBox(width: 24),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => WalletScreen(api: api)));
-                    },
-                    child: Row(
-                      children: const [
-                        Icon(Icons.account_balance_wallet_outlined, size: 20, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text('Кошелек', style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  const Row(
-                    children: [
-                      Icon(Icons.trending_up_outlined, size: 20, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text('Инвестиции', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => SettingsScreen(api: api)));
-                    },
-                    child: Row(
-                      children: const [
-                        Icon(Icons.settings_outlined, size: 20, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text('Настройки', style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(icon: const Icon(Icons.notifications_outlined, size: 24, color: Colors.white), onPressed: () {}),
-                  const CircleAvatar(radius: 14, backgroundColor: Color(0xFF3C4759), child: Icon(Icons.person, size: 16, color: Colors.white)),
-                ],
-              ),
+            _buildTopMenu(),
+            TabBar(
+              controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: const Color(0xFF00C4B4),
+              tabs: const [
+                Tab(text: 'Портфель'),
+                Tab(text: 'Дивиденды'),
+                Tab(text: 'Доход'),
+              ],
             ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Портфель', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        _buildStatCard(title: 'Стоимость', amount: portfolioValue, color: Colors.blue),
-                        const SizedBox(width: 16),
-                        _buildStatCard(title: 'Прибыль', amount: profit, color: Colors.green),
-                        const SizedBox(width: 16),
-                        _buildStatCard(title: 'Доходность', amount: 9.04, suffix: '%', color: Colors.orange),
-                        const SizedBox(width: 16),
-                        _buildStatCard(title: 'Пассивный доход', amount: passiveIncome, color: Colors.purple),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Stack(
-                            children: [
-                              SizedBox(
-                                height: 200,
-                                child: PieChart(
-                                  PieChartData(
-                                    sections: List.generate(
-                                      _assets.length,
-                                      (i) => PieChartSectionData(
-                                        value: _assets[i]['value'] as double,
-                                        color: _colors[i],
-                                        radius: 80,
-                                        showTitle: false,
-                                      ),
-                                    ),
-                                    centerSpaceRadius: 60,
-                                    sectionsSpace: 2,
-                                  ),
-                                ),
-                              ),
-                              if (_selectedAssetIndex != null && _tooltipPosition != null)
-                                Positioned(
-                                  left: _tooltipPosition!.dx - 80,
-                                  top: _tooltipPosition!.dy - 30,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.8),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '${_assets[_selectedAssetIndex!]['name']}: '
-                                      '${_assets[_selectedAssetIndex!]['value'].toStringAsFixed(0)} ₽ '
-                                      '(${_assets[_selectedAssetIndex!]['share']})',
-                                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Активы', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white)),
-                              const SizedBox(height: 8),
-                              ...List.generate(_assets.length, (i) => _buildAssetRow(i)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    const Text('Полученные дивиденды', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white)),
-                    const SizedBox(height: 8),
-                    ...dividends.map((d) => _buildDividendTile(d)),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 24, bottom: 24),
-              child: FloatingActionButton(
-                backgroundColor: const Color(0xFF00C4B4),
-                onPressed: () => ScaffoldMessenger.of(context)
-                    .showSnackBar(const SnackBar(content: Text('Добавление актива — в разработке'))),
-                child: const Icon(Icons.add, size: 32),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildPortfolioTab(),
+                  _buildDividendsTab(),
+                  _buildIncomeTab(),
+                ],
               ),
             ),
           ],
@@ -226,16 +112,91 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
     );
   }
 
-  Widget _buildStatCard({
-    required String title,
-    required double amount,
-    required Color color,
-    String suffix = '',
-  }) {
+  Widget _buildTopMenu() {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16213E),
+        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
+      ),
+      child: Row(
+        children: [
+          const Text('FinTrack', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+          const SizedBox(width: 24),
+          GestureDetector(
+            onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => WalletScreen(api: api))),
+            child: Row(
+              children: const [
+                Icon(Icons.account_balance_wallet_outlined, size: 20, color: Colors.grey),
+                SizedBox(width: 8),
+                Text('Кошелек', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.trending_up_outlined, size: 20, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Инвестиции', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+          ),
+          const Spacer(),
+          IconButton(icon: const Icon(Icons.notifications_outlined, size: 24, color: Colors.white), onPressed: () {}),
+          const CircleAvatar(radius: 14, backgroundColor: Color(0xFF3C4759), child: Icon(Icons.person, size: 16, color: Colors.white)),
+        ],
+      ),
+    );
+  }
+
+  // ------------------ Вкладка 1: Портфель ------------------
+  Widget _buildPortfolioTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildPortfolioStats(),
+          const SizedBox(height: 32),
+          _buildAssetsSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPortfolioStats() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Портфель', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _buildStatCard(title: 'Стоимость', amount: portfolioValue, color: Colors.white),
+            const SizedBox(width: 16),
+            _buildStatCard(title: 'Прибыль', amount: profit, color: Colors.white),
+            const SizedBox(width: 16),
+            _buildStatCard(title: 'Доходность', amount: 9.04, suffix: '%', color: Colors.white),
+            const SizedBox(width: 16),
+            _buildStatCard(title: 'Пассивный доход', amount: passiveIncome, color: Colors.white),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard({required String title, required double amount, required Color color, String suffix = ''}) {
     return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: Colors.grey[900],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -249,79 +210,171 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
     );
   }
 
+  Widget _buildAssetsSection() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 220,
+            child: PieChart(
+              PieChartData(
+                sections: List.generate(_assets.length, (i) {
+                  final isTouched = i == touchedIndex;
+                  final double radius = isTouched ? 90 : 80;
+                  return PieChartSectionData(
+                    value: _assets[i]['value'] as double,
+                    color: _colors[i],
+                    radius: radius,
+                    showTitle: false,
+                    badgeWidget: isTouched ? _buildBadge(_assets[i]) : null,
+                    badgePositionPercentageOffset: 1.2,
+                  );
+                }),
+                centerSpaceRadius: 60,
+                sectionsSpace: 2,
+                pieTouchData: PieTouchData(
+                  touchCallback: (event, pieTouchResponse) {
+                    setState(() {
+                      if (pieTouchResponse != null && pieTouchResponse.touchedSection != null) {
+                        touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                      } else {
+                        touchedIndex = null;
+                      }
+                    });
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Expanded(flex: 3, child: Text('Название', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 3, child: Text('Вложено', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 2, child: Text('Доход', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 2, child: Text('Доля', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...List.generate(_assets.length, (i) => _buildAssetRow(i)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBadge(Map<String, dynamic> asset) {
+    final value = asset['value'] as double;
+    final share = asset['share'] as String;
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(asset['name'], style: const TextStyle(color: Colors.white, fontSize: 12)),
+          Text('${value.toInt()} ₽', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          Text(share, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAssetRow(int index) {
     final asset = _assets[index];
     final name = asset['name'] as String;
     final value = asset['value'] as double;
     final profit = asset['profit'] as String;
     final share = asset['share'] as String;
-    final color = _colors[index];
-    return MouseRegion(
-      onEnter: (event) {
+
+    return GestureDetector(
+      onTap: () {
         setState(() {
-          _selectedAssetIndex = index;
-          _tooltipPosition = event.localPosition + const Offset(100, 100);
+          touchedIndex = index;
         });
       },
-      onExit: (_) {
-        setState(() {
-          _selectedAssetIndex = null;
-          _tooltipPosition = null;
-        });
-      },
-      child: GestureDetector(
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Актив: $name')),
-          );
-        },
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey.shade700)),
-            color: _selectedAssetIndex == index ? color.withOpacity(0.1) : null,
-          ),
-          child: Row(
-            children: [
-              Container(width: 12, height: 12, color: color, decoration: const BoxDecoration(shape: BoxShape.circle)),
-              const SizedBox(width: 12),
-              Column(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Expanded(flex: 3, child: Text(name, style: const TextStyle(color: Colors.white))),
+            Expanded(
+              flex: 3,
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white)),
-                  Text('${value.toInt()} ₽', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text('${value.toInt()} ₽', style: const TextStyle(color: Colors.white)),
+                  Text('Вложено', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
                 ],
               ),
-              const Spacer(),
-              Text(profit, style: TextStyle(fontWeight: FontWeight.bold, color: profit.startsWith('+') ? Colors.green : profit == '-' ? Colors.white : Colors.red)),
-              const SizedBox(width: 12),
-              Text(share, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-            ],
-          ),
+            ),
+            Expanded(flex: 2, child: Text(profit, style: TextStyle(color: profit.startsWith('+') ? Colors.green : profit == '-' ? Colors.white : Colors.red))),
+            Expanded(flex: 2, child: Text(share, style: const TextStyle(color: Colors.white))),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildDividendTile(Dividend d) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade700))),
-      child: Row(
-        children: [
-          Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.payments_outlined, size: 20, color: Colors.green)),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  // ------------------ Вкладка 2: Дивиденды ------------------
+  Widget _buildDividendsTab() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(24),
+      itemCount: dividends.length,
+      itemBuilder: (context, index) {
+        final d = dividends[index];
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade700))),
+          child: Row(
             children: [
-              Text(d.name, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white)),
-              Text('${d.date.day}.${d.date.month}.${d.date.year}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.payments_outlined, size: 20, color: Colors.green),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(d.name, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white)),
+                  Text('${d.date.day}.${d.date.month}.${d.date.year}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+              const Spacer(),
+              Text('${d.amount.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
             ],
           ),
-          const Spacer(),
-          Text('${d.amount.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        );
+      },
+    );
+  }
+
+  Widget _buildIncomeTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStatCard(title: 'Общий доход', amount: 54000, color: Colors.white),
+          const SizedBox(height: 16),
+          _buildStatCard(title: 'Доход от активов', amount: 32000, color: Colors.white),
+          const SizedBox(height: 16),
+          _buildStatCard(title: 'Пассивный доход', amount: passiveIncome, color: Colors.white),
         ],
       ),
     );
