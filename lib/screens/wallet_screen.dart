@@ -11,7 +11,6 @@ import 'package:fintrack/widgets/top_app_bar.dart';
 import 'package:fintrack/screens/income_screen.dart';
 import 'package:fintrack/screens/expense_screen.dart';
 
-/// Утилита форматирования
 String formatRubles(double amount, {bool withSign = false}) {
   if (amount == 0) return withSign ? '0 ₽' : '0 ₽';
   final isNegative = amount < 0;
@@ -45,9 +44,8 @@ class _WalletScreenState extends State<WalletScreen> {
   double wallet = 0;
   double investments = 0;
   List<Transaction> transactions = [];
-  List<Account> accounts = []; // ← кэшируем счета
+  List<Account> accounts = [];
 
-  // 🔹 Ручные балансы по банкам (редактируются)
   final Map<String, double> _bankBalances = {
     'Т-банк': 15765.0,
     'Сбербанк': 24310.0,
@@ -68,7 +66,7 @@ class _WalletScreenState extends State<WalletScreen> {
     try {
       final balance = await api.getBalance();
       final txs = await api.getTransactions();
-      final accs = await api.getAccounts(); // ← загружаем счета
+      final accs = await api.getAccounts();
       if (mounted) {
         setState(() {
           wallet = balance.wallet;
@@ -584,43 +582,85 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Widget _monthlySummary() {
-    return Container(
-      width: double.infinity,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => IncomeScreen(api: api))),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.withOpacity(0.2),
-                    foregroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Доход'),
+  return Container(
+    width: double.infinity,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => IncomeScreen(api: api))),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.withOpacity(0.2),
+                  foregroundColor: Colors.green,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
+                child: const Text('Доход'),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ExpenseScreen(api: api))),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.withOpacity(0.2),
-                    foregroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Расход'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ExpenseScreen(api: api))),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.withOpacity(0.2),
+                  foregroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
+                child: const Text('Расход'),
               ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          ..._groupTransactionsByDateLast3Days(transactions).entries.map((entry) {
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Сегодня',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _showAddTransaction,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF16213E),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                  label: const Text('Добавить', style: TextStyle(fontSize: 12, color: Colors.white)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            ...(() {
+              final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+              final todayTxs = transactions.where((t) {
+                final d = DateTime(t.date.year, t.date.month, t.date.day);
+                return d == today;
+              }).toList();
+
+              return todayTxs.map(_buildTransactionTile).toList();
+            })(),
+          ],
+        ),
+
+        ...(() {
+          final grouped = _groupTransactionsByDateLast3Days(transactions);
+          final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+          return grouped.entries
+              .where((entry) => entry.key != today)
+              .map((entry) {
             final date = entry.key;
             final txs = entry.value;
             final dateString = _formatDate(date);
@@ -628,35 +668,20 @@ class _WalletScreenState extends State<WalletScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      dateString,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    if (dateString == 'Сегодня')
-                      ElevatedButton.icon(
-                        onPressed: _showAddTransaction,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF16213E),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                        label: const Text('Добавить', style: TextStyle(fontSize: 12, color: Colors.white)),
-                      ),
-                  ],
+                Text(
+                  dateString,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 8),
                 ...txs.map(_buildTransactionTile).toList(),
               ],
             );
-          }),
-        ],
-      ),
-    );
-  }
+          }).toList();
+        })(),
+      ],
+    ),
+  );
+}
 
   Widget _buildBankCard(String name, double balance) {
     return GestureDetector(
