@@ -235,7 +235,6 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
     return colors[index % colors.length];
   }
 
-  // 🔹 Вычисляемые свойства
   double get _portfolioValue => _assets.fold(0.0, (sum, a) => sum + a.value);
   double get _totalInvested => _assets.fold(0.0, (sum, a) => sum + a.invested);
   double get _profit => _portfolioValue - _totalInvested;
@@ -349,7 +348,6 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
     );
   }
 
-  // Топ карточки с основными статистиками
   Widget _buildTopStatsCards() {
     Widget statCard(String title, String value, {Color? valueColor}) {
       return Expanded(
@@ -386,7 +384,6 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
     );
   }
 
-  // ✅ ГИПЕР-КРУТОЙ ГРАФИК ДЛЯ fl_chart — РАБОТАЕТ СРАЗУ
   Widget _buildPieChart() {
   if (_assets.isEmpty) {
     return Center(
@@ -418,7 +415,6 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
 
     if (!isHovered) return const SizedBox.shrink();
 
-    // ⚠️ Улучшим позиционирование: ограничим вылет меток за границы
     final angle = 2 * math.pi * i / _assets.length - math.pi / 2;
     final radius = 84.0; // чуть меньше, чтобы не вылезала
     final x = radius * math.cos(angle);
@@ -615,4 +611,5 @@ class _InvestmentsScreenState extends State<InvestmentsScreen>
       ),
     );
   }
+
 }
