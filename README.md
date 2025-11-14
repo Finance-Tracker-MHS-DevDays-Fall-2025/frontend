@@ -1,16 +1,68 @@
-# my_web_app
+**FinTrack — персональный финансовый трекер (Flutter Web)**
+---
 
-A new Flutter project.
+Веб-приложение для учёта доходов, расходов и инвестиций. Позволяет визуализировать траты, прогнозировать бюджет и отслеживать дивиденды. 
 
-## Getting Started
+Написано на Flutter с использованием REST-бэкенда (RealApiService), поддерживает кастомизацию интерфейса и гибкое управление финансами.
 
-This project is a starting point for a Flutter application.
+**Быстрый старт**
+---
 
-A few resources to get you started if this is your first Flutter project:
+1. Установите Flutter
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Рекомендуется Flutter 3.24+ / Dart 3.5+.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```
+flutter --version
+flutter doctor
+```
+
+2. Клонирование проекта
+
+Основной код — в my_web_app/.
+
+
+3. Зависимости
+
+```
+flutter pub get
+```
+4. Запуск проекта
+
+```
+flutter run -d web-server
+```
+
+Полученный localhost вставить в браузер
+
+**Функциональность**
+---
+
+Авторизация по user ID
+
+Просмотр баланса и динамики
+
+Добавление операций (доход/расход)
+
+История транзакций по дням
+
+Диаграммы (PieChart)
+
+Прогнозы по категориям
+
+Управление активами и инвестициями
+
+Редактирование балансов банков
+
+**Структура проекта**
+---
+my_web_app/
+├── lib/
+│   ├── app/          # Тема и корневые виджеты
+│   ├── models/       # Модели данных
+│   ├── services/     # Реальный API-клиент (Dio)
+│   ├── screens/      # Экранные виджеты
+│   ├── utils/        # Форматирование дат/денег
+│   └── widgets/      # Переиспользуемые UI-компоненты
+├── pubspec.yaml
+└── README.md
